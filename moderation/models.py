@@ -4,68 +4,58 @@ from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db import models, transaction
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import ugettext_lazy as _
+from model_utils import Choices
 
 from . import moderation
-from .constants import (
-    MODERATION_DRAFT_STATE,
-    MODERATION_READY_STATE,
-    MODERATION_STATUS_APPROVED,
-    MODERATION_STATUS_PENDING,
-    MODERATION_STATUS_REJECTED,
-)
+from .constants import (MODERATION_DRAFT_STATE, MODERATION_READY_STATE, MODERATION_STATUS_APPROVED,
+                        MODERATION_STATUS_PENDING, MODERATION_STATUS_REJECTED)
 from .diff import get_changes_between_models
 from .fields import SerializedObjectField
 from .managers import ModeratedObjectManager
 from .signals import post_moderation, pre_moderation
 
-MODERATION_STATES = [
-    (MODERATION_READY_STATE, _('Ready for moderation')),
-    (MODERATION_DRAFT_STATE, _('Draft')),
-]
+MODERATION_STATES = Choices(
+    (MODERATION_READY_STATE, 'ready', _('Ready for moderation')),
+    (MODERATION_DRAFT_STATE, 'draft', _('Draft')),
+)
 
-STATUS_CHOICES = [
-    (MODERATION_STATUS_REJECTED, _('Rejected')),
-    (MODERATION_STATUS_APPROVED, _('Approved')),
-    (MODERATION_STATUS_PENDING, _('Pending')),
-]
+STATUS_CHOICES = Choices(
+    (MODERATION_STATUS_REJECTED, 'rejected', _('Rejected')),
+    (MODERATION_STATUS_APPROVED, 'approved', _('Approved')),
+    (MODERATION_STATUS_PENDING, 'pending', _('Pending')),
+)
 
 
 class ModeratedObject(models.Model):
-    content_type = models.ForeignKey(
-        ContentType, null=True, blank=True, on_delete=models.SET_NULL, editable=False
-    )
-    object_pk = models.PositiveIntegerField(
-        null=True, blank=True, editable=False, db_index=True
-    )
-    content_object = GenericForeignKey(ct_field='content_type', fk_field='object_pk')
+    content_type = models.ForeignKey(ContentType, null=True, blank=True,
+                                     on_delete=models.SET_NULL,
+                                     editable=False)
+    object_pk = models.PositiveIntegerField(null=True, blank=True,
+                                            editable=False, db_index=True)
+    content_object = GenericForeignKey(ct_field='content_type',
+                                       fk_field='object_pk')
     created = models.DateTimeField(auto_now_add=True, editable=False)
     updated = models.DateTimeField(auto_now=True)
-    state = models.SmallIntegerField(
-        choices=MODERATION_STATES, default=MODERATION_DRAFT_STATE, editable=False
-    )
+    state = models.SmallIntegerField(choices=MODERATION_STATES,
+                                     default=MODERATION_DRAFT_STATE,
+                                     editable=False)
     status = models.SmallIntegerField(
-        choices=STATUS_CHOICES, default=MODERATION_STATUS_PENDING, editable=False
-    )
+        choices=STATUS_CHOICES,
+        default=MODERATION_STATUS_PENDING,
+        editable=False)
     by = models.ForeignKey(
         getattr(settings, 'AUTH_USER_MODEL', 'auth.User'),
-        blank=True,
-        null=True,
-        editable=False,
-        on_delete=models.SET_NULL,
-        related_name='moderated_objects',
-    )
+        blank=True, null=True, editable=False, on_delete=models.SET_NULL,
+        related_name='moderated_objects')
     on = models.DateTimeField(editable=False, blank=True, null=True)
     reason = models.TextField(blank=True, null=True)
-    changed_object = SerializedObjectField(serialize_format='json', editable=False)
+    changed_object = SerializedObjectField(serialize_format='json',
+                                           editable=False)
     changed_by = models.ForeignKey(
         getattr(settings, 'AUTH_USER_MODEL', 'auth.User'),
-        blank=True,
-        null=True,
-        editable=True,
-        on_delete=models.SET_NULL,
-        related_name='changed_by_set',
-    )
+        blank=True, null=True, editable=True, on_delete=models.SET_NULL,
+        related_name='changed_by_set')
 
     objects = ModeratedObjectManager()
 
@@ -91,7 +81,7 @@ class ModeratedObject(models.Model):
 
     def automoderate(self, user=None):
         '''Auto moderate object for given user.
-        Returns status of moderation.
+          Returns status of moderation.
         '''
         if user is None:
             user = self.changed_by
@@ -104,7 +94,9 @@ class ModeratedObject(models.Model):
             changed_object = self.get_object_for_this_type()
         else:
             changed_object = self.changed_object
-        status, reason = self._get_moderation_status_and_reason(changed_object, user)
+        status, reason = self._get_moderation_status_and_reason(
+            changed_object,
+            user)
 
         if status == MODERATION_STATUS_REJECTED:
             self.reject(by=self.by, reason=reason)
@@ -116,9 +108,9 @@ class ModeratedObject(models.Model):
         return status
 
     def _get_moderation_status_and_reason(self, obj, user):
-        """
+        '''
         Returns tuple of moderation status and reason for auto moderation
-        """
+        '''
         reason = self.moderator.is_auto_reject(obj, user)
         if reason:
             return MODERATION_STATUS_REJECTED, reason
@@ -149,19 +141,15 @@ class ModeratedObject(models.Model):
         return moderation.get_moderator(model_class)
 
     def _send_signals_and_moderate(self, new_status, by, reason):
-        pre_moderation.send(
-            sender=self.changed_object.__class__,
-            instance=self.changed_object,
-            status=new_status,
-        )
+        pre_moderation.send(sender=self.changed_object.__class__,
+                            instance=self.changed_object,
+                            status=new_status)
 
         self._moderate(new_status, by, reason)
 
-        post_moderation.send(
-            sender=self.content_type.model_class(),
-            instance=self.content_object,
-            status=new_status,
-        )
+        post_moderation.send(sender=self.content_type.model_class(),
+                             instance=self.content_object,
+                             status=new_status)
 
     def _moderate(self, new_status, by, reason):
         # See register.py pre_save_handler() for the case where the model is
@@ -170,11 +158,9 @@ class ModeratedObject(models.Model):
         # changes to the base object by saving the one attached to the
         # ModeratedObject.
 
-        if (
-            self.status == MODERATION_STATUS_PENDING
-            and new_status == MODERATION_STATUS_APPROVED
-            and not self.moderator.visible_until_rejected
-        ):
+        if (self.status == MODERATION_STATUS_PENDING and
+                new_status == MODERATION_STATUS_APPROVED and
+                not self.moderator.visible_until_rejected):
             base_object = self.changed_object
             base_object_force_save = True
         else:
@@ -198,7 +184,8 @@ class ModeratedObject(models.Model):
         self.save()
 
         if self.moderator.visibility_column:
-            old_visible = getattr(base_object, self.moderator.visibility_column)
+            old_visible = getattr(base_object,
+                                  self.moderator.visibility_column)
 
             if new_status == MODERATION_STATUS_APPROVED:
                 new_visible = True
@@ -208,7 +195,8 @@ class ModeratedObject(models.Model):
                 new_visible = self.moderator.visible_until_rejected
 
             if new_visible != old_visible:
-                setattr(base_object, self.moderator.visibility_column, new_visible)
+                setattr(base_object, self.moderator.visibility_column,
+                        new_visible)
                 base_object_force_save = True
 
         if base_object_force_save:
@@ -229,9 +217,10 @@ class ModeratedObject(models.Model):
         else:
             excludes = self.moderator.fields_exclude
 
-        changes = get_changes_between_models(
-            original_obj, self.changed_object, excludes, includes
-        )
+        changes = get_changes_between_models(original_obj,
+                                             self.changed_object,
+                                             excludes,
+                                             includes)
 
         for change in changes:
             left_change, right_change = changes[change].change

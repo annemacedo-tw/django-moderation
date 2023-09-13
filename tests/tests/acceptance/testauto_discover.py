@@ -11,7 +11,6 @@ class AutoDiscoverAcceptanceTestCase(TestCase):
     As a developer I want to have a way auto discover all apps that have module
     moderator and register it with moderation.
     '''
-
     urls = 'tests.urls.auto_discover'
 
     def setUp(self):

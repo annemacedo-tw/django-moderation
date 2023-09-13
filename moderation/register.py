@@ -1,11 +1,10 @@
 from django.contrib.contenttypes.fields import GenericRelation
+from django.utils.six import with_metaclass
 
-from .constants import (
-    MODERATION_DRAFT_STATE,
-    MODERATION_STATUS_APPROVED,
-    MODERATION_STATUS_PENDING,
-)
-from .models import ModeratedObject
+from .constants import (MODERATION_DRAFT_STATE,
+                        MODERATION_STATUS_APPROVED,
+                        MODERATION_STATUS_PENDING)
+from .models import ModeratedObject, STATUS_CHOICES
 from .moderator import GenericModerator
 
 
@@ -14,18 +13,20 @@ class RegistrationError(Exception):
 
 
 class ModerationManagerSingleton(type):
+
     def __init__(cls, name, bases, dict):
         super().__init__(name, bases, dict)
         cls.instance = None
 
     def __call__(cls, *args, **kw):
         if cls.instance is None:
-            cls.instance = super(ModerationManagerSingleton, cls).__call__(*args, **kw)
+            cls.instance = super(ModerationManagerSingleton, cls)\
+                .__call__(*args, **kw)
 
         return cls.instance
 
 
-class ModerationManager(metaclass=ModerationManagerSingleton):
+class ModerationManager(with_metaclass(ModerationManagerSingleton, object)):
     def __init__(self, *args, **kwargs):
         """Initializes the moderation manager."""
         self._registered_models = {}
@@ -41,10 +42,8 @@ class ModerationManager(metaclass=ModerationManagerSingleton):
             moderator_class = GenericModerator
 
         if not issubclass(moderator_class, GenericModerator):
-            msg = (
-                'moderator_class must subclass '
-                'GenericModerator class, found %s' % moderator_class
-            )
+            msg = 'moderator_class must subclass '\
+                  'GenericModerator class, found %s' % moderator_class
             raise AttributeError(msg)
 
         moderator_class_instance = moderator_class(model_class)
@@ -63,32 +62,33 @@ class ModerationManager(metaclass=ModerationManagerSingleton):
     def _connect_signals(self, model_class):
         from django.db.models import signals
 
-        signals.pre_save.connect(self.pre_save_handler, sender=model_class)
-        signals.post_save.connect(self.post_save_handler, sender=model_class)
+        signals.pre_save.connect(self.pre_save_handler,
+                                 sender=model_class)
+        signals.post_save.connect(self.post_save_handler,
+                                  sender=model_class)
 
     def _add_moderated_object_to_class(self, model_class):
         if hasattr(model_class, '_relation_object'):
             relation_object = getattr(model_class, '_relation_object')
         else:
             relation_object = GenericRelation(
-                ModeratedObject, object_id_field='object_pk'
-            )
+                ModeratedObject,
+                object_id_field='object_pk')
 
         model_class.add_to_class('_relation_object', relation_object)
 
         def get_moderated_object(self):
             if not hasattr(self, '_moderated_object'):
                 if self._relation_object.count() > 0:
-                    self._moderated_object = (
-                        getattr(self, '_relation_object')
-                        .filter()
-                        .order_by('-updated')[0]
-                    )
+                    self._moderated_object = getattr(self, '_relation_object')\
+                        .filter().order_by('-updated')[0]
                 else:
-                    self._moderated_object = getattr(self, '_relation_object').get()
+                    self._moderated_object = getattr(self, '_relation_object')\
+                        .get()
             return self._moderated_object
 
-        model_class.add_to_class('moderated_object', property(get_moderated_object))
+        model_class.add_to_class('moderated_object',
+                                 property(get_moderated_object))
 
     def _add_moderated_status_to_class(self, model_class):
         # Add the moderation_object to the class if it hasn't been yet
@@ -96,27 +96,28 @@ class ModerationManager(metaclass=ModerationManagerSingleton):
             self._add_moderated_object_to_class(model_class)
 
         def get_moderated_status(self):
-            return self.moderated_object.get_status_display()
+            return STATUS_CHOICES[self.moderated_object.status]
 
-        model_class.add_to_class('moderated_status', property(get_moderated_status))
+        model_class.add_to_class('moderated_status',
+                                 property(get_moderated_status))
 
     def _add_fields_to_model_class(self, moderator_class_instance):
         """Sets moderation manager on model class,
-        adds generic relation to ModeratedObject,
-        sets _default_manager on model class as instance of
-        ModerationObjectsManager
+           adds generic relation to ModeratedObject,
+           sets _default_manager on model class as instance of
+           ModerationObjectsManager
         """
         model_class = moderator_class_instance.model_class
         base_managers = moderator_class_instance.base_managers
-        moderation_manager_class = moderator_class_instance.moderation_manager_class
+        moderation_manager_class = moderator_class_instance.\
+            moderation_manager_class
 
         for manager_name, mgr_class in base_managers:
             if moderation_manager_class not in mgr_class.__bases__:
                 ModeratedManager = type(
                     str('Moderated{}'.format(mgr_class.__name__)),
                     (moderation_manager_class, mgr_class),
-                    {},
-                )
+                    {})
 
                 manager = ModeratedManager()
 
@@ -139,12 +140,10 @@ class ModerationManager(metaclass=ModerationManagerSingleton):
                 finally:
                     model_class._meta._expire_cache()
 
-                model_class.add_to_class(
-                    'unmoderated_{}'.format(manager_name), mgr_class()
-                )
+                model_class.add_to_class('unmoderated_{}'.format(manager_name),
+                                         mgr_class())
         unmoderated_manager = getattr(
-            model_class, 'unmoderated_{}'.format(model_class._default_manager.name)
-        )
+            model_class, 'unmoderated_{}'.format(model_class._default_manager.name))
         model_class.add_to_class('_default_unmoderated_manager', unmoderated_manager)
 
         self._add_moderated_object_to_class(model_class)
@@ -174,17 +173,12 @@ class ModerationManager(metaclass=ModerationManagerSingleton):
 
         model_class = moderator_class_instance.model_class
 
-        moderated_manager_indexes = [
-            i
-            for i, m in enumerate(model_class._meta.local_managers)
-            if not m.name.startswith('unmoderated_')
-        ]
+        moderated_manager_indexes = [i for i, m
+                                     in enumerate(model_class._meta.local_managers)
+                                     if not m.name.startswith('unmoderated_')]
 
-        managers = [
-            m
-            for i, m in enumerate(model_class._meta.local_managers)
-            if i not in moderated_manager_indexes
-        ]
+        managers = [m for i, m in enumerate(model_class._meta.local_managers)
+                    if i not in moderated_manager_indexes]
 
         for m in managers:
             m.name = m.name.replace('unmoderated_', '')
@@ -213,13 +207,12 @@ class ModerationManager(metaclass=ModerationManagerSingleton):
         unchanged_obj = self._get_unchanged_object(instance)
         moderator = self.get_moderator(sender)
         if unchanged_obj:
-            moderated_obj = self._get_or_create_moderated_object(
-                instance, unchanged_obj, moderator
-            )
-            if not (
-                moderated_obj.status == MODERATION_STATUS_APPROVED
-                or moderator.bypass_moderation_after_approval
-            ):
+            moderated_obj = self._get_or_create_moderated_object(instance,
+                                                                 unchanged_obj,
+                                                                 moderator)
+            if not (moderated_obj.status ==
+                    MODERATION_STATUS_APPROVED or
+                    moderator.bypass_moderation_after_approval):
                 moderated_obj.save()
 
     def _get_unchanged_object(self, instance):
@@ -227,7 +220,8 @@ class ModerationManager(metaclass=ModerationManagerSingleton):
             return None
         pk = instance.pk
         try:
-            unchanged_obj = instance.__class__._default_unmoderated_manager.get(pk=pk)
+            unchanged_obj = instance.__class__.\
+                _default_unmoderated_manager.get(pk=pk)
             return unchanged_obj
         except instance.__class__.DoesNotExist:
             return None
@@ -245,13 +239,13 @@ class ModerationManager(metaclass=ModerationManagerSingleton):
 
         return unchanged_obj
 
-    def _get_or_create_moderated_object(self, instance, unchanged_obj, moderator):
+    def _get_or_create_moderated_object(self, instance,
+                                        unchanged_obj, moderator):
         """
         Get or create ModeratedObject instance.
         If moderated object is not equal instance then serialize unchanged
         in moderated object in order to use it later in post_save_handler
         """
-
         def get_new_instance(unchanged_obj):
             moderated_object = ModeratedObject(content_object=unchanged_obj)
             moderated_object.changed_object = unchanged_obj
@@ -264,12 +258,13 @@ class ModerationManager(metaclass=ModerationManagerSingleton):
             #     moderated_object = ModeratedObject.objects.\
             #         get_for_instance(instance)
 
-            moderated_object = ModeratedObject.objects.get_for_instance(instance)
+            moderated_object = ModeratedObject.objects.get_for_instance(
+                instance)
             if moderated_object is None:
                 moderated_object = get_new_instance(unchanged_obj)
-            elif moderator.keep_history and moderated_object.has_object_been_changed(
-                instance
-            ):
+            elif moderator.keep_history and \
+                    moderated_object.has_object_been_changed(
+                    instance):
                 # We're keeping history and this isn't an update of an existing
                 # moderation
                 moderated_object = get_new_instance(unchanged_obj)
@@ -283,12 +278,11 @@ class ModerationManager(metaclass=ModerationManagerSingleton):
                     moderated_object.changed_object = instance
                 else:
                     moderated_object.changed_object = self._get_updated_object(
-                        instance, unchanged_obj, moderator
-                    )
-            elif moderated_object.has_object_been_changed(instance, only_excluded=True):
+                        instance, unchanged_obj, moderator)
+            elif moderated_object.has_object_been_changed(instance,
+                                                          only_excluded=True):
                 moderated_object.changed_object = self._get_updated_object(
-                    instance, unchanged_obj, moderator
-                )
+                    instance, unchanged_obj, moderator)
 
         return moderated_object
 
@@ -327,10 +321,8 @@ class ModerationManager(metaclass=ModerationManagerSingleton):
 
         moderated_obj = ModeratedObject.objects.get_for_instance(instance)
 
-        if (
-            moderated_obj.status == MODERATION_STATUS_APPROVED
-            and moderator.bypass_moderation_after_approval
-        ):
+        if (moderated_obj.status == MODERATION_STATUS_APPROVED and
+                moderator.bypass_moderation_after_approval):
             # save new data in moderated object
             moderated_obj.changed_object = instance
             moderated_obj.save()
@@ -354,5 +346,6 @@ class ModerationManager(metaclass=ModerationManagerSingleton):
             instance._moderated_object = moderated_obj
 
     def _copy_model_instance(self, obj):
-        initial = dict([(f.name, getattr(obj, f.name)) for f in obj._meta.fields])
+        initial = dict(
+            [(f.name, getattr(obj, f.name)) for f in obj._meta.fields])
         return obj.__class__(**initial)

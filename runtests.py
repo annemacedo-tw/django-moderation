@@ -41,6 +41,7 @@ if not settings.configured and not os.environ.get('DJANGO_SETTINGS_MODULE'):
             'django.contrib.sessions',
             'django.contrib.sites',
             'django.contrib.messages',
+
             'moderation',
             'tests',
         ],
@@ -48,10 +49,12 @@ if not settings.configured and not os.environ.get('DJANGO_SETTINGS_MODULE'):
         MEDIA_URL='/media/',
         STATIC_URL='/static/',
         ROOT_URLCONF='tests.urls.default',
-        MODERATION_MODERATORS=('test@example.com',),
+
+        MODERATION_MODERATORS=(
+            'test@example.com',
+        ),
         DEBUG=True,
         SITE_ID=1,
-        SECRET_KEY="dummy",
         # For Django 1.10 compatibility
         # See https://docs.djangoproject.com/en/1.10/ref/settings/#std:setting-TEMPLATES
         TEMPLATES=[
@@ -63,7 +66,7 @@ if not settings.configured and not os.environ.get('DJANGO_SETTINGS_MODULE'):
                 },
             },
         ],
-        **MIDDLEWARE_KWARG,
+        **MIDDLEWARE_KWARG
     )
 
 
@@ -76,7 +79,6 @@ def prepare_test_runner(*args, **kwargs):
 
     django.setup()
     from django.test.runner import DiscoverRunner
-
     test_runner = DiscoverRunner(
         pattern='test*.py',
         verbosity=kwargs.get('verbosity', 1),

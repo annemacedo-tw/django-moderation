@@ -1,6 +1,10 @@
 import os
 
-DEBUG = True
+ADMINS = (
+    # ('Your Name', 'your_email@domain.com'),
+)
+
+MANAGERS = ADMINS
 
 DATABASES = {
     'default': {
@@ -13,20 +17,9 @@ DATABASES = {
     }
 }
 
-TIME_ZONE = 'UTC'
-LANGUAGE_CODE = 'en'
-USE_I18N = True
-USE_L10N = True
-USE_TZ = True
+TIME_ZONE = 'America/Chicago'
 
-LOCALE_PATHS = [
-    os.path.join('../moderation/locale'),
-]
-
-LANGUAGES = (
-    ('de', 'German'),
-    ('en', 'English'),
-)
+LANGUAGE_CODE = 'en-us'
 
 # Absolute path to the directory that holds media.
 # Example: "/home/media/media.lawrence.com/"
@@ -70,6 +63,7 @@ INSTALLED_APPS = (
     'django.contrib.staticfiles',
     'moderation',
     'example_project.example_app',
+    # 'test_extensions',
 )
 
 AUTH_USER_MODEL = 'example_app.CustomUser'
@@ -77,19 +71,22 @@ AUTH_USER_MODEL = 'example_app.CustomUser'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [os.path.join(os.path.dirname(__file__), 'templates')],
+        'DIRS': [
+            os.path.join(os.path.dirname(__file__), "templates")
+        ],
+        'APP_DIRS': True,
         'OPTIONS': {
-            'loaders': (
-                'django.template.loaders.filesystem.Loader',
-                'django.template.loaders.app_directories.Loader',
-            ),
             'context_processors': [
                 'django.contrib.auth.context_processors.auth',
                 'django.template.context_processors.i18n',
                 'django.template.context_processors.request',
                 'django.template.context_processors.media',
-                'django.contrib.messages.context_processors.messages',
+                'django.contrib.messages.context_processors.messages'
             ],
+            'loaders': (
+                'django.template.loaders.filesystem.Loader',
+                'django.template.loaders.app_directories.Loader',
+            ),
         },
     },
 ]

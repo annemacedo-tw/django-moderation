@@ -4,13 +4,11 @@
 .installed.cfg
 .idea
 .tox
-.python-version
 bin
 develop-eggs
 dist
 downloads
 eggs
-.eggs
 parts
 *.egg-info
 */example_project.db
@@ -18,4 +16,3 @@ venv
 .venv
 build
 docs/_build
-*.iml

@@ -2,11 +2,9 @@ from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
-User = getattr(settings, 'AUTH_USER_MODEL', 'auth.User')
-
 
 class ExampleUserProfile(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(getattr(settings, 'AUTH_USER_MODEL', 'auth.User'))
     description = models.TextField()
     url = models.URLField()
 
@@ -23,7 +21,8 @@ class CustomUser(AbstractUser):
 
 
 class UserProfileWithCustomUser(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(
+        getattr(settings, 'AUTH_USER_MODEL', 'auth.User'))
     description = models.TextField()
     url = models.URLField()
 

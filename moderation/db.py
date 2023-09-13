@@ -13,6 +13,7 @@
 import inspect
 
 from django.db.models import base
+from django.utils.six import with_metaclass
 
 from .moderator import GenericModerator
 from .register import ModerationManager
@@ -30,7 +31,6 @@ class ModeratedModelBase(type):
            a instance of ``GenericModerator``
 
     """
-
     def _resolve_moderator(cls):
         """
         ``ModeratedModel`` that defines the class Moderator
@@ -81,6 +81,6 @@ class ModelBase(ModeratedModelBase, base.ModelBase):
     """
 
 
-class ModeratedModel(base.Model, metaclass=ModelBase):
+class ModeratedModel(with_metaclass(ModelBase, base.Model)):
     class Meta:
         abstract = True
